@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:web3modal_flutter/models/custom_button.dart';
 
 import 'package:web3modal_flutter/services/w3m_service/i_w3m_service.dart';
 import 'package:web3modal_flutter/widgets/buttons/base_button.dart';
@@ -8,6 +9,8 @@ class W3MConnectWalletButton extends StatefulWidget {
   const W3MConnectWalletButton({
     super.key,
     required this.service,
+    this.title,
+    this.button,
     this.size = BaseButtonSize.regular,
     this.state,
   });
@@ -15,7 +18,8 @@ class W3MConnectWalletButton extends StatefulWidget {
   final IW3MService service;
   final BaseButtonSize size;
   final ConnectButtonState? state;
-
+  final CustomButton? button;
+  final String? title;
   @override
   State<W3MConnectWalletButton> createState() => _W3MConnectWalletButtonState();
 }
@@ -50,6 +54,8 @@ class _W3MConnectWalletButtonState extends State<W3MConnectWalletButton> {
       state: _state,
       size: widget.size,
       onTap: () => _onConnectPressed(context),
+      button: widget.button,
+      titleOverride: widget.title,
     );
   }
 

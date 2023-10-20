@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 class CustomButton {
-  final Widget child;
+  final Widget Function(String?) child;
   final Color? highlightColor;
   final Color? splashColor;
   final Color? color;

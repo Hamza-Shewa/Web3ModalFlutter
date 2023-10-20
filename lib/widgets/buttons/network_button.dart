@@ -62,7 +62,12 @@ class NetworkButton extends StatelessWidget {
               padding: 6.0,
             ),
             SizedBox(width: 8),
-            button!.child,
+            button!.child(
+              chainInfo?.chainName ??
+                  (size == BaseButtonSize.small
+                      ? StringConstants.selectNetworkShort
+                      : StringConstants.selectNetwork),
+            ),
           ],
         ),
       );
