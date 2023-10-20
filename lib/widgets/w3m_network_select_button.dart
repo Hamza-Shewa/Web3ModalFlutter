@@ -13,7 +13,7 @@ class W3MNetworkSelectButton extends StatefulWidget {
     super.key,
     required this.service,
     this.size = BaseButtonSize.regular,
-    this.button,
+    required this.button,
   });
 
   final IW3MService service;
