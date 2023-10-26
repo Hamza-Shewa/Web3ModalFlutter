@@ -41,7 +41,7 @@ class ConnectButton extends StatelessWidget {
     final borderRadius = radiuses.isSquare() ? 0.0 : size.height / 2;
     if (button != null) {
       return MaterialButton(
-        onPressed: onTap,
+        onPressed: disabled || connecting ? null : onTap,
         elevation: 0,
         height: button!.height,
         minWidth: button!.width,

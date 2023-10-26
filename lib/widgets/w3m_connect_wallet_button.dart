@@ -62,11 +62,6 @@ class _W3MConnectWalletButtonState extends State<W3MConnectWalletButton> {
   }
 
   void _onConnectPressed(BuildContext context) async {
-    if (widget.service.selectedChain == null) {
-      if (widget.onNoChainSelected != null) {
-        widget.onNoChainSelected!();
-      }
-    }
     if (widget.service.isConnected) {
       widget.service.disconnect();
     } else {
