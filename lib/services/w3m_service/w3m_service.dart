@@ -34,86 +34,13 @@ import 'package:web3modal_flutter/utils/toast/toast_utils_singleton.dart';
 import 'package:web3modal_flutter/utils/url/url_utils_singleton.dart';
 
 class W3MServiceException implements Exception {
+  W3MServiceException(this.message, [this.stackTrace]) : super();
+
   final dynamic message;
   final dynamic stackTrace;
-  W3MServiceException(this.message, [this.stackTrace]) : super();
 }
 
 class W3MService with ChangeNotifier implements IW3MService {
-  static const String selectedChainId = 'selectedChainId';
-
-  var _projectId = '';
-
-  bool _isInitialized = false;
-  @override
-  bool get isInitialized => _isInitialized;
-
-  W3MChainInfo? _currentSelectedChain;
-  @override
-  W3MChainInfo? get selectedChain => _currentSelectedChain;
-
-  W3MWalletInfo? _selectedWallet;
-  @override
-  W3MWalletInfo? get selectedWallet => _selectedWallet;
-
-  Map<String, RequiredNamespace> _requiredNamespaces = {};
-  @override
-  Map<String, RequiredNamespace> get requiredNamespaces => _requiredNamespaces;
-
-  Map<String, RequiredNamespace> _optionalNamespaces =
-      NamespaceConstants.ethereum;
-  @override
-  Map<String, RequiredNamespace> get optionalNamespaces => _optionalNamespaces;
-
-  ConnectResponse? connectResponse;
-  Future<SessionData>? get sessionFuture => connectResponse?.session.future;
-
-  BuildContext? _context;
-
-  @override
-  String? get wcUri => connectResponse?.uri.toString();
-
-  IWeb3App? _web3App;
-  @override
-  IWeb3App? get web3App => _web3App;
-
-  dynamic _initError;
-  @override
-  dynamic get initError => _initError;
-
-  String? _tokenImageUrl;
-  @override
-  String? get tokenImageUrl => _tokenImageUrl;
-
-  String? _avatarUrl;
-  @override
-  String? get avatarUrl => _avatarUrl;
-
-  double? _chainBalance;
-  @override
-  double? get chainBalance => _chainBalance;
-
-  bool _isOpen = false;
-  @override
-  bool get isOpen => _isOpen;
-
-  bool _isConnected = false;
-  @override
-  bool get isConnected => _isConnected;
-
-  SessionData? _currentSession;
-  @override
-  SessionData? get session => _currentSession;
-
-  String? _address;
-  @override
-  String? get address => _address;
-
-  @override
-  final Event<EventArgs> onPairingExpire = Event();
-
-  bool _connectingWallet = false;
-
   W3MService({
     IWeb3App? web3App,
     String? projectId,
@@ -168,6 +95,171 @@ class W3MService with ChangeNotifier implements IW3MService {
         await storageService.instance.init();
       },
     );
+  }
+
+  static const String selectedChainId = 'selectedChainId';
+
+  ConnectResponse? connectResponse;
+
+  @override
+  final Event<EventArgs> onPairingExpire = Event();
+
+  String? _address;
+  String? _avatarUrl;
+  double? _chainBalance;
+  bool _connectingWallet = false;
+  BuildContext? _context;
+  W3MChainInfo? _currentSelectedChain;
+  SessionData? _currentSession;
+  dynamic _initError;
+  bool _isConnected = false;
+  bool _isInitialized = false;
+  bool _isOpen = false;
+  Map<String, RequiredNamespace> _optionalNamespaces =
+      NamespaceConstants.ethereum;
+
+  var _projectId = '';
+  Map<String, RequiredNamespace> _requiredNamespaces = {};
+  W3MWalletInfo? _selectedWallet;
+  String? _tokenImageUrl;
+  IWeb3App? _web3App;
+
+  @override
+  String? get address => _address;
+
+  @override
+  String? get avatarUrl => _avatarUrl;
+
+  @override
+  Future<void> buildConnectionUri() async {
+    // If we aren't connected, connect!
+    if (!_isConnected) {
+      W3MLoggerUtil.logger.t(
+        '[$runtimeType] Connecting to WalletConnect, '
+        'required namespaces: $requiredNamespaces, '
+        'optional namespaces: $optionalNamespaces',
+      );
+
+      if (connectResponse != null) {
+        try {
+          sessionFuture?.timeout(Duration.zero);
+        } catch (_) {
+          // Ignore this error, just wanted to cancel the previous future.
+        }
+      }
+
+      connectResponse = await _web3App!.connect(
+        requiredNamespaces: requiredNamespaces,
+        optionalNamespaces: optionalNamespaces,
+      );
+
+      _notify();
+
+      _awaitConnectResponse();
+    }
+  }
+
+  @override
+  double? get chainBalance => _chainBalance;
+
+  @override
+  void closeModal() {
+    // If we aren't open, then we can't and shouldn't close
+    if (!_isOpen) {
+      return;
+    }
+
+    toastUtils.instance.clear();
+    if (_context != null) {
+      // _isOpen and notify() are handled when we call Navigator.pop()
+      // by the open() method
+      Navigator.pop(_context!);
+    } else {
+      _notify();
+    }
+  }
+
+  @override
+  Future<void> connectWallet([W3MWalletInfo? walletInfo]) async {
+    _checkInitialized();
+    final walletToConnect = _selectedWallet ?? walletInfo;
+    if (walletToConnect == null) {
+      throw W3MServiceException(
+        'You didn\'t select a wallet or walletInfo argument is null',
+      );
+    }
+
+    if (_connectingWallet) {
+      return;
+    }
+    _connectingWallet = true;
+
+    try {
+      await buildConnectionUri();
+      await urlUtils.instance.navigateDeepLink(
+        nativeLink: walletToConnect.listing.mobileLink,
+        universalLink: walletToConnect.listing.webappLink,
+        wcURI: wcUri!,
+      );
+      // Update explorer service with new recent
+      explorerService.instance!.updateRecentPosition(
+        walletToConnect.listing.id,
+      );
+    } on LaunchUrlException catch (e, s) {
+      W3MLoggerUtil.logger.e('[$runtimeType] error launching wallet $e, $s');
+      toastUtils.instance.show(
+        ToastMessage(
+          type: ToastType.error,
+          text: e.message,
+        ),
+      );
+    }
+
+    _connectingWallet = false;
+  }
+
+  @override
+  Future<void> disconnect({bool disconnectAllSessions = true}) async {
+    _checkInitialized();
+
+    // If we don't have a session, disconnect automatically and notify listeners
+    if (_currentSession == null) {
+      return _cleanSession();
+    }
+
+    // If we want to disconnect all sessions, loop through them and disconnect them
+    if (disconnectAllSessions) {
+      for (final SessionData session in _web3App!.sessions.getAll()) {
+        await _disconnectSession(session);
+      }
+    } else {
+      // Disconnect the session
+      await _disconnectSession(_currentSession!);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_isInitialized) {
+      _unregisterListeners();
+    }
+    super.dispose();
+  }
+
+  @override
+  Future<void> expirePreviousInactivePairings() async {
+    for (var pairing in _web3App!.pairings.getAll()) {
+      if (!pairing.active) {
+        await _web3App!.core.expirer.expire(pairing.topic);
+      }
+    }
+  }
+
+  @override
+  String getReferer() {
+    _checkInitialized();
+
+    return _web3App!.metadata.name.replaceAll(' ', '');
   }
 
   ////////* PUBLIC METHODS */////////
@@ -230,8 +322,7 @@ class W3MService with ChangeNotifier implements IW3MService {
       final chainId = storageService.instance.getString(selectedChainId) ?? '';
       // If we had a chainId stored, use it!
       if (chainId.isNotEmpty && W3MChainPresets.chains.containsKey(chainId)) {
-        await selectChain(W3MChainPresets.chains[chainId]!,
-            launchConnectWallet: true);
+        await selectChain(W3MChainPresets.chains[chainId]!);
       } else {
         // Otherwise, just get the first chainId from the namespaces of the session and use that
         final chainIds = NamespaceUtils.getChainIdsFromNamespaces(
@@ -241,8 +332,7 @@ class W3MService with ChangeNotifier implements IW3MService {
           final String chainId = chainIds.first.split(':')[1];
           // If we have the chain in our presets, set it as the selected chain
           if (W3MChainPresets.chains.containsKey(chainId)) {
-            await selectChain(W3MChainPresets.chains[chainId]!,
-                launchConnectWallet: true);
+            await selectChain(W3MChainPresets.chains[chainId]!);
           }
         }
       }
@@ -253,71 +343,63 @@ class W3MService with ChangeNotifier implements IW3MService {
   }
 
   @override
-  Future<void> selectChain(
-    W3MChainInfo? chainInfo, {
-    bool switchChain = false,
-    bool launchConnectWallet = false,
-  }) async {
-    _checkInitialized();
+  dynamic get initError => _initError;
 
-    if (chainInfo?.chainId == _currentSelectedChain?.chainId) {
-      return;
+  @override
+  bool get isConnected => _isConnected;
+
+  @override
+  bool get isInitialized => _isInitialized;
+
+  @override
+  bool get isOpen => _isOpen;
+
+  @override
+  void launchBlockExplorer() async {
+    if (_currentSelectedChain?.blockExplorer != null) {
+      final blockExplorer = _currentSelectedChain!.blockExplorer!.url;
+      final explorerUrl = '$blockExplorer/address/$address';
+      await urlUtils.instance.launchUrl(
+        Uri.parse(explorerUrl),
+        mode: LaunchMode.externalApplication,
+      );
     }
-
-    _chainBalance = null;
-    _tokenImageUrl = null;
-
-    // If the chain is null, disconnect and stop.
-    if (chainInfo == null) {
-      _currentSelectedChain = null;
-      await storageService.instance.setString(selectedChainId, '');
-      _setRequiredNamespaces({});
-      await disconnect();
-      return;
-    }
-
-    // Store the chain for when we reload the app.
-    await storageService.instance.setString(selectedChainId, chainInfo.chainId);
-
-    // TODO all this logic about switching chain seems odd. A full test has to be done.
-    final hasValidSession = isConnected && _currentSession != null;
-    if (switchChain && hasValidSession && _currentSelectedChain != null) {
-      final hasSwitchMethod = NamespaceUtils.getNamespacesMethodsForChainId(
-        chainId: _currentSelectedChain!.namespace,
-        namespaces: _currentSession!.namespaces,
-      ).contains(EthUtil.walletSwitchEthChain);
-      final hasChainAlready = !NamespaceUtils.getChainIdsFromNamespaces(
-        namespaces: _currentSession!.namespaces,
-      ).contains(chainInfo.namespace);
-      final chainIsDifferent =
-          _currentSelectedChain!.chainId != chainInfo.chainId;
-      if (hasSwitchMethod && !hasChainAlready && chainIsDifferent) {
-        // Then we swap/add the chain and launch the wallet
-        _switchEthChain(_currentSelectedChain!, chainInfo);
-        if (launchConnectWallet) {
-          await launchConnectedWallet();
-        }
-      }
-    }
-
-    _currentSelectedChain = chainInfo;
-    // Get the token/chain icon
-    _tokenImageUrl = _getTokenImage(chainInfo);
-
-    // Set the requiredNamespace to be the selected chain
-    // This will also notify listeners
-    _setRequiredNamespaces(_currentSelectedChain!.requiredNamespaces);
-
-    W3MLoggerUtil.logger.t('[$runtimeType] setSelectedChain success');
-    _loadAccountData();
   }
 
-  String _getTokenImage(W3MChainInfo chainInfo) {
-    if (chainInfo.chainIcon != null && chainInfo.chainIcon!.contains('http')) {
-      return chainInfo.chainIcon!;
+  @override
+  Future<void> launchConnectedWallet() async {
+    _checkInitialized();
+
+    if (_currentSession == null) {
+      return;
     }
-    final chainImageId = AssetUtil.getChainIconId(chainInfo.chainId);
-    return explorerService.instance!.getAssetImageUrl(chainImageId);
+
+    final redirect = _constructRedirect();
+
+    W3MLoggerUtil.logger.t(
+      '[$runtimeType] Launching wallet: $redirect, ${_currentSession?.peer.metadata}',
+    );
+
+    if (redirect == null) {
+      await urlUtils.instance.launchUrl(
+        Uri.parse(_currentSession!.peer.metadata.url),
+      );
+    } else {
+      // Get the native and universal URLs and add the 'wc' to the end
+      // in the redirect.
+      final nativeUrl = coreUtils.instance.createSafeUrl(redirect.native ?? '');
+      final universalUrl =
+          coreUtils.instance.createPlainUrl(redirect.universal ?? '');
+
+      await urlUtils.instance.launchRedirect(
+        nativeUri: Uri.parse(
+          '${nativeUrl}wc?sessionTopic=${_currentSession!.topic}',
+        ),
+        universalUri: Uri.parse(
+          '${universalUrl}wc?sessionTopic=${_currentSession!.topic}',
+        ),
+      );
+    }
   }
 
   @override
@@ -385,124 +467,7 @@ class W3MService with ChangeNotifier implements IW3MService {
   }
 
   @override
-  Future<void> expirePreviousInactivePairings() async {
-    for (var pairing in _web3App!.pairings.getAll()) {
-      if (!pairing.active) {
-        await _web3App!.core.expirer.expire(pairing.topic);
-      }
-    }
-  }
-
-  @override
-  Future<void> buildConnectionUri() async {
-    // If we aren't connected, connect!
-    if (!_isConnected) {
-      W3MLoggerUtil.logger.t(
-        '[$runtimeType] Connecting to WalletConnect, '
-        'required namespaces: $requiredNamespaces, '
-        'optional namespaces: $optionalNamespaces',
-      );
-
-      if (connectResponse != null) {
-        try {
-          sessionFuture?.timeout(Duration.zero);
-        } catch (_) {
-          // Ignore this error, just wanted to cancel the previous future.
-        }
-      }
-
-      connectResponse = await _web3App!.connect(
-        requiredNamespaces: requiredNamespaces,
-        optionalNamespaces: optionalNamespaces,
-      );
-
-      _notify();
-
-      _awaitConnectResponse();
-    }
-  }
-
-  @override
-  Future<void> connectWallet([W3MWalletInfo? walletInfo]) async {
-    _checkInitialized();
-    final walletToConnect = _selectedWallet ?? walletInfo;
-    if (walletToConnect == null) {
-      throw W3MServiceException(
-        'You didn\'t select a wallet or walletInfo argument is null',
-      );
-    }
-
-    if (_connectingWallet) {
-      return;
-    }
-    _connectingWallet = true;
-
-    try {
-      await buildConnectionUri();
-      await urlUtils.instance.navigateDeepLink(
-        nativeLink: walletToConnect.listing.mobileLink,
-        universalLink: walletToConnect.listing.webappLink,
-        wcURI: wcUri!,
-      );
-      // Update explorer service with new recent
-      explorerService.instance!.updateRecentPosition(
-        walletToConnect.listing.id,
-      );
-    } on LaunchUrlException catch (e, s) {
-      W3MLoggerUtil.logger.e('[$runtimeType] error launching wallet $e, $s');
-      toastUtils.instance.show(
-        ToastMessage(
-          type: ToastType.error,
-          text: e.message,
-        ),
-      );
-    }
-
-    _connectingWallet = false;
-  }
-
-  @override
-  Future<void> launchConnectedWallet() async {
-    _checkInitialized();
-
-    if (_currentSession == null) {
-      return;
-    }
-
-    final redirect = _constructRedirect();
-
-    W3MLoggerUtil.logger.t(
-      '[$runtimeType] Launching wallet: $redirect, ${_currentSession?.peer.metadata}',
-    );
-
-    if (redirect == null) {
-      await urlUtils.instance.launchUrl(
-        Uri.parse(_currentSession!.peer.metadata.url),
-      );
-    } else {
-      // Get the native and universal URLs and add the 'wc' to the end
-      // in the redirect.
-      final nativeUrl = coreUtils.instance.createSafeUrl(redirect.native ?? '');
-      final universalUrl =
-          coreUtils.instance.createPlainUrl(redirect.universal ?? '');
-
-      await urlUtils.instance.launchRedirect(
-        nativeUri: Uri.parse(
-          '${nativeUrl}wc?sessionTopic=${_currentSession!.topic}',
-        ),
-        universalUri: Uri.parse(
-          '${universalUrl}wc?sessionTopic=${_currentSession!.topic}',
-        ),
-      );
-    }
-  }
-
-  @override
-  String getReferer() {
-    _checkInitialized();
-
-    return _web3App!.metadata.name.replaceAll(' ', '');
-  }
+  Map<String, RequiredNamespace> get optionalNamespaces => _optionalNamespaces;
 
   @override
   Future<void> reconnectRelay() async {
@@ -512,40 +477,63 @@ class W3MService with ChangeNotifier implements IW3MService {
   }
 
   @override
-  Future<void> disconnect({bool disconnectAllSessions = true}) async {
-    _checkInitialized();
-
-    // If we don't have a session, disconnect automatically and notify listeners
-    if (_currentSession == null) {
-      return _cleanSession();
-    }
-
-    // If we want to disconnect all sessions, loop through them and disconnect them
-    if (disconnectAllSessions) {
-      for (final SessionData session in _web3App!.sessions.getAll()) {
-        await _disconnectSession(session);
-      }
-    } else {
-      // Disconnect the session
-      await _disconnectSession(_currentSession!);
-    }
-  }
+  Map<String, RequiredNamespace> get requiredNamespaces => _requiredNamespaces;
 
   @override
-  void closeModal() {
-    // If we aren't open, then we can't and shouldn't close
-    if (!_isOpen) {
+  Future<void> selectChain(
+    W3MChainInfo? chainInfo, {
+    bool switchChain = false,
+  }) async {
+    _checkInitialized();
+
+    if (chainInfo?.chainId == _currentSelectedChain?.chainId) {
       return;
     }
 
-    toastUtils.instance.clear();
-    if (_context != null) {
-      // _isOpen and notify() are handled when we call Navigator.pop()
-      // by the open() method
-      Navigator.pop(_context!);
-    } else {
-      _notify();
+    _chainBalance = null;
+    _tokenImageUrl = null;
+
+    // If the chain is null, disconnect and stop.
+    if (chainInfo == null) {
+      _currentSelectedChain = null;
+      await storageService.instance.setString(selectedChainId, '');
+      _setRequiredNamespaces({});
+      await disconnect();
+      return;
     }
+
+    // Store the chain for when we reload the app.
+    await storageService.instance.setString(selectedChainId, chainInfo.chainId);
+
+    // TODO all this logic about switching chain seems odd. A full test has to be done.
+    final hasValidSession = isConnected && _currentSession != null;
+    if (switchChain && hasValidSession && _currentSelectedChain != null) {
+      final hasSwitchMethod = NamespaceUtils.getNamespacesMethodsForChainId(
+        chainId: _currentSelectedChain!.namespace,
+        namespaces: _currentSession!.namespaces,
+      ).contains(EthUtil.walletSwitchEthChain);
+      final hasChainAlready = !NamespaceUtils.getChainIdsFromNamespaces(
+        namespaces: _currentSession!.namespaces,
+      ).contains(chainInfo.namespace);
+      final chainIsDifferent =
+          _currentSelectedChain!.chainId != chainInfo.chainId;
+      if (hasSwitchMethod && !hasChainAlready && chainIsDifferent) {
+        // Then we swap/add the chain and launch the wallet
+        _switchEthChain(_currentSelectedChain!, chainInfo);
+        await launchConnectedWallet();
+      }
+    }
+
+    _currentSelectedChain = chainInfo;
+    // Get the token/chain icon
+    _tokenImageUrl = _getTokenImage(chainInfo);
+
+    // Set the requiredNamespace to be the selected chain
+    // This will also notify listeners
+    _setRequiredNamespaces(_currentSelectedChain!.requiredNamespaces);
+
+    W3MLoggerUtil.logger.t('[$runtimeType] setSelectedChain success');
+    _loadAccountData();
   }
 
   @override
@@ -555,23 +543,31 @@ class W3MService with ChangeNotifier implements IW3MService {
   }
 
   @override
-  void launchBlockExplorer() async {
-    if (_currentSelectedChain?.blockExplorer != null) {
-      final blockExplorer = _currentSelectedChain!.blockExplorer!.url;
-      final explorerUrl = '$blockExplorer/address/$address';
-      await urlUtils.instance.launchUrl(
-        Uri.parse(explorerUrl),
-        mode: LaunchMode.externalApplication,
-      );
-    }
-  }
+  W3MChainInfo? get selectedChain => _currentSelectedChain;
 
   @override
-  void dispose() {
-    if (_isInitialized) {
-      _unregisterListeners();
+  W3MWalletInfo? get selectedWallet => _selectedWallet;
+
+  @override
+  SessionData? get session => _currentSession;
+
+  @override
+  String? get tokenImageUrl => _tokenImageUrl;
+
+  @override
+  String? get wcUri => connectResponse?.uri.toString();
+
+  @override
+  IWeb3App? get web3App => _web3App;
+
+  Future<SessionData>? get sessionFuture => connectResponse?.session.future;
+
+  String _getTokenImage(W3MChainInfo chainInfo) {
+    if (chainInfo.chainIcon != null && chainInfo.chainIcon!.contains('http')) {
+      return chainInfo.chainIcon!;
     }
-    super.dispose();
+    final chainImageId = AssetUtil.getChainIconId(chainInfo.chainId);
+    return explorerService.instance!.getAssetImageUrl(chainImageId);
   }
 
   ////////* PRIVATE METHODS */////////
@@ -827,7 +823,7 @@ extension _W3MServiceListeners on W3MService {
     if (args?.name == EthUtil.chainChanged) {
       if (W3MChainPresets.chains.containsKey('${args?.data}')) {
         final chain = W3MChainPresets.chains['${args?.data}'];
-        selectChain(chain, launchConnectWallet: true);
+        selectChain(chain);
       }
     }
   }

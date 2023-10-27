@@ -14,13 +14,13 @@ class W3MNetworkSelectButton extends StatefulWidget {
     required this.service,
     this.size = BaseButtonSize.regular,
     this.button,
-    this.launchConnectWallet = false,
+    this.onTap,
   });
 
   final IW3MService service;
   final BaseButtonSize size;
   final CustomButton? button;
-  final bool launchConnectWallet;
+  final Function? onTap;
   @override
   State<W3MNetworkSelectButton> createState() => _W3MNetworkSelectButtonState();
 }
@@ -46,7 +46,13 @@ class _W3MNetworkSelectButtonState extends State<W3MNetworkSelectButton> {
     return NetworkButton(
       chainInfo: _selectedChain,
       size: widget.size,
-      onTap: () => _onConnectPressed(context),
+      onTap: () {
+        if (widget.onTap == null) {
+          _onConnectPressed(context);
+        } else {
+          widget.onTap!();
+        }
+      },
       button: widget.button,
     );
   }
@@ -56,11 +62,8 @@ class _W3MNetworkSelectButtonState extends State<W3MNetworkSelectButton> {
       context,
       SelectNetworkPage(
         onTapNetwork: (info) {
-          widget.service.selectChain(info,
-              launchConnectWallet: widget.launchConnectWallet);
-          if (widget.launchConnectWallet) {
-            widgetStack.instance.addDefault();
-          }
+          widget.service.selectChain(info);
+          widgetStack.instance.addDefault();
         },
       ),
     );

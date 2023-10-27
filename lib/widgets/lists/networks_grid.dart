@@ -19,7 +19,6 @@ class NetworksGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final service = Web3ModalProvider.of(context).service;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: kPadding12),
       child: Wrap(

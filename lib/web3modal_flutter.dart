@@ -10,6 +10,7 @@ export 'constants/namespaces.dart'; // TODO check if this export is needed
 /// Models
 export 'models/w3m_chains_presets.dart';
 export 'models/w3m_chain_info.dart';
+export 'models/custom_button.dart';
 
 /// Utils
 export 'utils/w3m_logger.dart';
