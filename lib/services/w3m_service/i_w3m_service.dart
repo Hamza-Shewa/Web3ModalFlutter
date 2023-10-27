@@ -59,7 +59,8 @@ abstract class IW3MService with ChangeNotifier {
   /// Sets the [selectedChain] and gets the [chainBalance].
   /// If the wallet is already connected, it will request the chain to be changed and will update the session with the new chain.
   /// If [chainInfo] is null this will disconnect the wallet.
-  Future<void> selectChain(W3MChainInfo? chainInfo, {bool switchChain = false});
+  Future<void> selectChain(W3MChainInfo? chainInfo,
+      {bool switchChain = false, bool launchConnectWallet});
 
   void launchBlockExplorer();
 

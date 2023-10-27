@@ -72,7 +72,8 @@ class AccountPage extends StatelessWidget {
                       widgetStack.instance.add(SelectNetworkPage(
                         onTapNetwork: (W3MChainInfo chainInfo) {
                           // TODO check what happens when switch can not be done
-                          service.selectChain(chainInfo, switchChain: true);
+                          service.selectChain(chainInfo,
+                              switchChain: true, launchConnectWallet: true);
                           widgetStack.instance.pop();
                         },
                       ));

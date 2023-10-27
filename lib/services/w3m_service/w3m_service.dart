@@ -230,7 +230,8 @@ class W3MService with ChangeNotifier implements IW3MService {
       final chainId = storageService.instance.getString(selectedChainId) ?? '';
       // If we had a chainId stored, use it!
       if (chainId.isNotEmpty && W3MChainPresets.chains.containsKey(chainId)) {
-        await selectChain(W3MChainPresets.chains[chainId]!);
+        await selectChain(W3MChainPresets.chains[chainId]!,
+            launchConnectWallet: true);
       } else {
         // Otherwise, just get the first chainId from the namespaces of the session and use that
         final chainIds = NamespaceUtils.getChainIdsFromNamespaces(
@@ -240,7 +241,8 @@ class W3MService with ChangeNotifier implements IW3MService {
           final String chainId = chainIds.first.split(':')[1];
           // If we have the chain in our presets, set it as the selected chain
           if (W3MChainPresets.chains.containsKey(chainId)) {
-            await selectChain(W3MChainPresets.chains[chainId]!);
+            await selectChain(W3MChainPresets.chains[chainId]!,
+                launchConnectWallet: true);
           }
         }
       }
@@ -254,6 +256,7 @@ class W3MService with ChangeNotifier implements IW3MService {
   Future<void> selectChain(
     W3MChainInfo? chainInfo, {
     bool switchChain = false,
+    bool launchConnectWallet = false,
   }) async {
     _checkInitialized();
 
@@ -291,7 +294,10 @@ class W3MService with ChangeNotifier implements IW3MService {
       if (hasSwitchMethod && !hasChainAlready && chainIsDifferent) {
         // Then we swap/add the chain and launch the wallet
         _switchEthChain(_currentSelectedChain!, chainInfo);
-        await launchConnectedWallet();
+
+        if (launchConnectWallet) {
+          await launchConnectedWallet();
+        }
       }
     }
 
@@ -822,7 +828,7 @@ extension _W3MServiceListeners on W3MService {
     if (args?.name == EthUtil.chainChanged) {
       if (W3MChainPresets.chains.containsKey('${args?.data}')) {
         final chain = W3MChainPresets.chains['${args?.data}'];
-        selectChain(chain);
+        selectChain(chain, launchConnectWallet: true);
       }
     }
   }
