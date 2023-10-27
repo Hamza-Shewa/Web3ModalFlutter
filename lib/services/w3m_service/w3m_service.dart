@@ -294,11 +294,8 @@ class W3MService with ChangeNotifier implements IW3MService {
       if (hasSwitchMethod && !hasChainAlready && chainIsDifferent) {
         // Then we swap/add the chain and launch the wallet
         _switchEthChain(_currentSelectedChain!, chainInfo);
-        print('wallet launch');
         if (launchConnectWallet) {
-          print('wallet launching');
           await launchConnectedWallet();
-          print('wallet launched');
         }
       }
     }

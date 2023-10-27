@@ -58,7 +58,9 @@ class _W3MNetworkSelectButtonState extends State<W3MNetworkSelectButton> {
         onTapNetwork: (info) {
           widget.service.selectChain(info,
               launchConnectWallet: widget.launchConnectWallet);
-          widgetStack.instance.addDefault();
+          if (widget.launchConnectWallet) {
+            widgetStack.instance.addDefault();
+          }
         },
       ),
     );
